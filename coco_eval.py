@@ -5,6 +5,7 @@
 import sys
 import pandas as pd
 import os
+import glob
 
 os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
 #os.environ['CUDA_VISIBLE_DEVICES']='0'
@@ -49,7 +50,7 @@ model.load_weights(weights_path)
 eval_result_original = validation(model, dump_name = 'original')
 joblib.dump(eval_result_original, 'metrics-raw-original.dump')
 
-raw_eval_list = get_ipython().getoutput('ls metrics-raw*.dump')
+raw_eval_list = glob.glob('metrics-raw*.dump')
 
 for raw_eval in raw_eval_list:
     eval_result = joblib.load(raw_eval)
