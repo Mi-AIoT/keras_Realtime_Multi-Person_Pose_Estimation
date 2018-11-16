@@ -1,3 +1,4 @@
+import os
 import sys
 sys.path.append('.')
 import argparse
@@ -8,7 +9,14 @@ import numpy as np
 import util
 from config_reader import config_reader
 from scipy.ndimage.filters import gaussian_filter
-from model import get_testing_model
+
+USE_CAFFE=True
+
+if USE_CAFFE:
+    os.environ['GLOG_minloglevel'] = '2'
+    import caffe
+else:
+    from model import get_testing_model
 
 
 # find connection in the specified sequence, center 29 is in the position 15
@@ -28,11 +36,31 @@ colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0]
           [85, 0, 255], \
           [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
 
+def caffePredict(net, input_img):
+    # shape for input (data blob is N x C x H x W), set data
+    in_ = input_img
+    in_ = in_.transpose((0,3,1,2))
+    in_ = in_ / 256
+    in_ = in_ - 0.5
+    net.blobs['data'].reshape(*in_.shape)
+    net.blobs['data'].data[...] = in_
+    # run net and take argmax for prediction
+    outputs = net.forward()
+    output_blobs = []
+    paf_blob = outputs.values()[0].transpose((0,2,3,1))
+    heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+    output_blobs.append(paf_blob)
+    output_blobs.append(heatmap_blob)
+
+    return output_blobs
 
 def process (input_image, params, model_params):
 
     oriImg = cv2.imread(input_image)  # B,G,R order
     multiplier = [x * model_params['boxsize'] / oriImg.shape[0] for x in params['scale_search']]
+
+    if USE_CAFFE:
+        multiplier = multiplier[:-1]
 
     heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 19))
     paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 38))
@@ -45,8 +73,10 @@ def process (input_image, params, model_params):
                                                           model_params['padValue'])
 
         input_img = np.transpose(np.float32(imageToTest_padded[:,:,:,np.newaxis]), (3,0,1,2)) # required shape (1, width, height, channels)
-
-        output_blobs = model.predict(input_img)
+        if USE_CAFFE:
+            output_blobs = caffePredict(model, input_img)
+        else:
+            output_blobs = model.predict(input_img)
 
         # extract outputs, resize, and remove padding
         heatmap = np.squeeze(output_blobs[1])  # output 1 is heatmaps
@@ -233,14 +263,20 @@ if __name__ == '__main__':
     parser.add_argument('--image', type=str, required=True, help='input image')
     parser.add_argument('--output', type=str, default='result.png', help='output image')
     parser.add_argument('--model', type=str, default='model/keras/model.h5', help='path to the weights file')
+    parser.add_argument('--gpu', type=int, choices=range(16), help='Specify which GPU device id to train')
+
 
     args = parser.parse_args()
     input_image = args.image
     output = args.output
+    gpu = args.gpu
     keras_weights_file = args.model
 
     tic = time.time()
     print('start processing...')
+
+    # load config
+    params, model_params = config_reader()
 
     # load model
 
@@ -249,11 +285,16 @@ if __name__ == '__main__':
     stages = 6
     np_branch1 = 38
     np_branch2 = 19
-    model = get_testing_model(np_branch1, np_branch2, stages)
-    model.load_weights(keras_weights_file)
-
-    # load config
-    params, model_params = config_reader()
+    if USE_CAFFE == False:
+        model = get_testing_model(np_branch1, np_branch2, stages)
+        model.load_weights(keras_weights_file)
+    else:
+        if gpu == None:
+            caffe.set_mode_cpu()
+        else:
+            caffe.set_device(int(gpu))
+            caffe.set_mode_gpu()
+        model = caffe.Net(model_params['deployFile'], model_params['caffemodel'], caffe.TEST)
 
     # generate image with body parts
     canvas = process(input_image, params, model_params)
