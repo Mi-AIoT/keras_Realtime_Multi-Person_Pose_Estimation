@@ -1,3 +1,5 @@
+import sys
+sys.path.append('.')
 import argparse
 import cv2
 import math
@@ -244,7 +246,10 @@ if __name__ == '__main__':
 
     # authors of original model don't use
     # vgg normalization (subtracting mean) on input images
-    model = get_testing_model()
+    stages = 6
+    np_branch1 = 38
+    np_branch2 = 19
+    model = get_testing_model(np_branch1, np_branch2, stages)
     model.load_weights(keras_weights_file)
 
     # load config
