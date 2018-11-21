@@ -20,6 +20,7 @@ from config_reader import config_reader
 params, model_params = config_reader()
 params['scale_search'] = list(params['scale_search'])
 
+USE_CAFFE = os.environ.get('USE_CAFFE')
 
 # the middle joints heatmap correpondence
 mapIdx = [[31, 32], [39, 40], [33, 34], [35, 36], [41, 42], [43, 44], [19, 20], [21, 22], \
@@ -30,6 +31,23 @@ limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], \
            [10, 11], [2, 12], [12, 13], [13, 14], [2, 1], [1, 15], [15, 17], \
            [1, 16], [16, 18], [3, 17], [6, 18]]
 
+def caffePredict(net, input_img):
+    # shape for input (data blob is N x C x H x W), set data
+    in_ = input_img
+    in_ = in_.transpose((0,3,1,2))
+    in_ = in_ / 256
+    in_ = in_ - 0.5
+    net.blobs['data'].reshape(*in_.shape)
+    net.blobs['data'].data[...] = in_
+    # run net and take argmax for prediction
+    outputs = net.forward()
+    output_blobs = []
+    paf_blob = outputs.values()[0].transpose((0,2,3,1))
+    heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+    output_blobs.append(paf_blob)
+    output_blobs.append(heatmap_blob)
+
+    return output_blobs
 
 def predict(image, model, model_params):
     # print (image.shape)
@@ -47,7 +65,10 @@ def predict(image, model, model_params):
         input_img = np.transpose(np.float32(imageToTest_padded[:, :, :, np.newaxis]),
                                  (3, 0, 1, 2))  # required shape (1, width, height, channels)
 
-        output_blobs = model.predict(input_img)
+        if USE_CAFFE:
+            output_blobs = caffePredict(model, input_img)
+        else:
+            output_blobs = model.predict(input_img)
 
         # extract outputs, resize, and remove padding
         heatmap = np.squeeze(output_blobs[1])  # output 1 is heatmaps
@@ -276,7 +297,11 @@ def predict_many(coco, images_directory, validation_ids, params, model, model_pa
     assert (not set(validation_ids).difference(set(coco.getImgIds())))
 
     keypoints = {}
+    i = 0
     for image_id in tqdm.tqdm(validation_ids):
+        if i == 326:
+            print("now break!\r\n")
+        i += 1
         image_name = get_image_name(coco, image_id)
         image_name = os.path.join(images_directory, image_name)
         keypoints[image_id] = process(image_name, dict(params), model, dict(model_params))
@@ -316,7 +341,8 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
 
     resFile = '%s/results/%s_%s_%s100_results.json'
     resFile = resFile % (dataDir, prefix, dataset, dump_name)
-    os.makedirs(os.path.dirname(resFile), exist_ok=True)
+    if os.path.exists(os.path.dirname(resFile)) == False:
+        os.makedirs(os.path.dirname(resFile))
 
     keypoints = predict_many(cocoGt, os.path.join(dataDir, dataset), validation_ids, params, model, model_params)
     format_results(keypoints, resFile)

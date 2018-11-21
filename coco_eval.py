@@ -14,13 +14,21 @@ sys.path.append(os.path.join(os.getcwd(), 'testing'))
 
 print(sys.version)
 
-from keras.models import Model
-from model import get_testing_model
+USE_CAFFE = os.environ.get('USE_CAFFE')
+
+if USE_CAFFE:
+    os.environ['GLOG_minloglevel'] = '2'
+    import caffe
+else:
+    from keras.models import Model
+    from model import get_testing_model
+
 from coco_metric import per_image_scores, validation
 from sklearn.externals import joblib
+from config_reader import config_reader
 
-# Create keras model and load weights
-model = get_testing_model()
+params, model_params = config_reader()
+
 print(os.getcwd())
 
 #training_dir = './training/'
@@ -44,9 +52,19 @@ print(os.getcwd())
 #    eval_result = validation(model, dump_name = trained_model)
 #    joblib.dump(eval_result, 'metrics-raw-%s.dump' % trained_model)
 
-weights_path = "model/keras/model.h5" # orginal weights converted from caffe
-
-model.load_weights(weights_path)
+if USE_CAFFE:
+    gpu = 1
+    if gpu == None:
+        caffe.set_mode_cpu()
+    else:
+        caffe.set_device(int(gpu))
+        caffe.set_mode_gpu()
+    model = caffe.Net(model_params['deployFile'], model_params['caffemodel'], caffe.TEST)
+else:
+    # Create keras model and load weights
+    model = get_testing_model()
+    weights_path = "model/keras/model.h5" # orginal weights converted from caffe
+    model.load_weights(weights_path)
 eval_result_original = validation(model, dump_name = 'original')
 joblib.dump(eval_result_original, 'metrics-raw-original.dump')
 
