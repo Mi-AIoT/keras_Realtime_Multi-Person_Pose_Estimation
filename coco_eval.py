@@ -6,6 +6,25 @@ import sys
 import pandas as pd
 import os
 import glob
+import argparse
+
+def FILE_EXIST(file):
+    if not os.path.exists(file):
+        raise argparse.ArgumentTypeError("File {} doesn't exist.".format(file))
+    else:
+        return file
+
+def DIR_EXIST(dir):
+    if not os.path.isdir(dir):
+        raise argparse.ArgumentTypeError("Directory {} doesn't exist.".format(dir))
+    else:
+        return dir
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', type=str, default="val2014", help='dataset used, supported val2014 or val2017')
+parser.add_argument('--evallist', type=FILE_EXIST, help='evaluation list, such as caffe_rtpose/image_info_val2014_1k.txt')
+parser.add_argument('--gpu', type=int, choices=range(16), help='Specify which GPU device id to train')
+args = parser.parse_args()
 
 os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
 #os.environ['CUDA_VISIBLE_DEVICES']='0'
@@ -53,19 +72,33 @@ print(os.getcwd())
 #    joblib.dump(eval_result, 'metrics-raw-%s.dump' % trained_model)
 
 if USE_CAFFE:
-    gpu = 1
+    gpu = args.gpu
     if gpu == None:
         caffe.set_mode_cpu()
     else:
         caffe.set_device(int(gpu))
         caffe.set_mode_gpu()
     model = caffe.Net(model_params['deployFile'], model_params['caffemodel'], caffe.TEST)
+    print("Use Caffe to do accuracy testing!")
+    print("Prototxt: {}\r\nCaffemodel: {}".format(model_params['deployFile'], model_params['caffemodel']))
 else:
     # Create keras model and load weights
     model = get_testing_model()
     weights_path = "model/keras/model.h5" # orginal weights converted from caffe
     model.load_weights(weights_path)
-eval_result_original = validation(model, dump_name = 'original')
+    print("Use keras to do accuracy testing!")
+    print("Load model weights {}".format(weights_path))
+
+validation_ids = None
+if args.evallist is not None:
+    validation_ids = []
+    with open(args.evallist, 'r') as eval_file:
+        for line in eval_file.readlines():
+            splits = line.split()
+            if len(splits) > 1:
+                validation_ids.append(int(splits[1]))
+
+eval_result_original = validation(model, dump_name = 'original', validation_ids=validation_ids, dataset=args.dataset)
 joblib.dump(eval_result_original, 'metrics-raw-original.dump')
 
 raw_eval_list = glob.glob('metrics-raw*.dump')

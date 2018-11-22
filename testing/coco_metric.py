@@ -297,11 +297,7 @@ def predict_many(coco, images_directory, validation_ids, params, model, model_pa
     assert (not set(validation_ids).difference(set(coco.getImgIds())))
 
     keypoints = {}
-    i = 0
     for image_id in tqdm.tqdm(validation_ids):
-        if i == 326:
-            print("now break!\r\n")
-        i += 1
         image_name = get_image_name(coco, image_id)
         image_name = os.path.join(images_directory, image_name)
         keypoints[image_id] = process(image_name, dict(params), model, dict(model_params))
