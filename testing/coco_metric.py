@@ -37,13 +37,19 @@ def caffePredict(net, input_img):
     in_ = in_.transpose((0,3,1,2))
     in_ = in_ / 256
     in_ = in_ - 0.5
-    net.blobs['data'].reshape(*in_.shape)
-    net.blobs['data'].data[...] = in_
+    inputname = net.inputs[0]
+    net.blobs[inputname].reshape(*in_.shape)
+    net.blobs[inputname].data[...] = in_
     # run net and take argmax for prediction
     outputs = net.forward()
     output_blobs = []
-    paf_blob = outputs.values()[0].transpose((0,2,3,1))
-    heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+    if len(outputs.keys()) > 1:
+        paf_blob = outputs.values()[0].transpose((0,2,3,1))
+        heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+    else:
+        blobs = outputs.values()[0]
+        heatmap_blob = blobs[:,:19,:,:].transpose((0,2,3,1))
+        paf_blob = blobs[:,19:,:,:].transpose((0,2,3,1))
     output_blobs.append(paf_blob)
     output_blobs.append(heatmap_blob)
 
