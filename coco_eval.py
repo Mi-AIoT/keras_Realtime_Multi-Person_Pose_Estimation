@@ -21,6 +21,8 @@ def DIR_EXIST(dir):
         return dir
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--deploy_proto', type=FILE_EXIST, help='Openpose deploy prototxt')
+parser.add_argument('--deploy_weights', type=FILE_EXIST, help='Openpose deploy weights')
 parser.add_argument('--dataset', type=str, default="val2014", help='dataset used, supported val2014 or val2017')
 parser.add_argument('--evallist', type=FILE_EXIST, help='evaluation list, such as caffe_rtpose/image_info_val2014_1k.txt')
 parser.add_argument('--gpu', type=int, choices=range(16), help='Specify which GPU device id to train')
@@ -78,6 +80,10 @@ if USE_CAFFE:
     else:
         caffe.set_device(int(gpu))
         caffe.set_mode_gpu()
+    if args.deploy_proto:
+        model_params['deployFile'] = args.deploy_proto
+    if args.deploy_weights:
+        model_params['caffemodel'] = args.deploy_weights
     model = caffe.Net(model_params['deployFile'], model_params['caffemodel'], caffe.TEST)
     print("Use Caffe to do accuracy testing!")
     print("Prototxt: {}\r\nCaffemodel: {}".format(model_params['deployFile'], model_params['caffemodel']))
