@@ -70,7 +70,7 @@ def predict(image, model, model_params):
 
         input_img = np.transpose(np.float32(imageToTest_padded[:, :, :, np.newaxis]),
                                  (3, 0, 1, 2))  # required shape (1, width, height, channels)
-        print("scale {}, preprocessed imaged shape {} -> {}".format(scale, image.shape, imageToTest_padded.shape))
+        #print("scale {}, preprocessed imaged shape {} -> {}".format(scale, image.shape, imageToTest_padded.shape))
         if USE_CAFFE:
             output_blobs = caffePredict(model, input_img)
         else:

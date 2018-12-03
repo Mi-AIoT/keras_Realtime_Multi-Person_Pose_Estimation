@@ -27,10 +27,10 @@ bbox_ratio = 0.25
 ## don't edit this part
 
 [[1]]
-caffemodel = 'openpose_fixed_point.caffemodel'
-deployFile = 'openpose_fixed_point.prototxt'
-#caffemodel = './model/caffe/_trained_COCO/pose_iter_440000.caffemodel'
-#deployFile = './model/caffe/_trained_COCO/pose_deploy.prototxt'
+#caffemodel = 'openpose_fixed_point.caffemodel'
+#deployFile = 'openpose_fixed_point.prototxt'
+caffemodel = './model/caffe/_trained_COCO/pose_iter_440000.caffemodel'
+deployFile = './model/caffe/_trained_COCO/pose_deploy.prototxt'
 #deployFile = '../openpose/models/pose/coco/pose_deploy_linevec.prototxt'
 description = 'COCO Pose56 Two-level Linevec'
 boxsize = 368
