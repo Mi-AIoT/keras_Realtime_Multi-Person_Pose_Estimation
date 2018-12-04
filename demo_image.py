@@ -53,24 +53,29 @@ def caffePredict(net, input_img):
     in_ = in_.transpose((0,3,1,2))
     in_ = in_ / 256
     in_ = in_ - 0.5
-    net.blobs['data'].reshape(*in_.shape)
-    net.blobs['data'].data[...] = in_
+    inputname = net.inputs[0]
+    net.blobs[inputname].reshape(*in_.shape)
+    net.blobs[inputname].data[...] = in_
     # run net and take argmax for prediction
     outputs = net.forward()
     output_blobs = []
     if len(outputs.keys()) > 1:
-        paf_blob = outputs.values()[0].transpose((0,2,3,1))
-        heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+        blob_0 = outputs.values()[0].transpose((0,2,3,1))
+        blob_1 = outputs.values()[1].transpose((0,2,3,1))
+        if blob_0.shape[3] == 19:
+            heatmap_blob = blob_0
+            paf_blob = blob_1
+        else:
+            heatmap_blob = blob_1
+            paf_blob = blob_0
     else:
         blobs = outputs.values()[0]
         heatmap_blob = blobs[:,:19,:,:].transpose((0,2,3,1))
         paf_blob = blobs[:,19:,:,:].transpose((0,2,3,1))
-    paf_blob = paf_blob / 1100.62162136
-    heatmap_blob = heatmap_blob / 1100.62162136
+    #paf_blob = paf_blob / 1100.62162136
+    #heatmap_blob = heatmap_blob / 1100.62162136
     output_blobs.append(paf_blob)
     output_blobs.append(heatmap_blob)
-
-    return output_blobs
 
     return output_blobs
 

@@ -50,32 +50,43 @@ def caffePredict(net, input_img):
         blobs = outputs.values()[0]
         heatmap_blob = blobs[:,:19,:,:].transpose((0,2,3,1))
         paf_blob = blobs[:,19:,:,:].transpose((0,2,3,1))
-    paf_blob = paf_blob / 1100.62162136
-    heatmap_blob = heatmap_blob / 1100.62162136
+    #paf_blob = paf_blob / 1100.62162136
+    #heatmap_blob = heatmap_blob / 1100.62162136
     output_blobs.append(paf_blob)
     output_blobs.append(heatmap_blob)
 
     return output_blobs
 
-def predict(image, model, model_params):
+def predict(image, model, model_params, input_image):
     # print (image.shape)
     heatmap_avg = np.zeros((image.shape[0], image.shape[1], 19))
     paf_avg = np.zeros((image.shape[0], image.shape[1], 38))
     long_side = image.shape[0]
     if image.shape[0] < image.shape[1]:
         long_side = image.shape[1]
-    multiplier = [x * model_params['boxsize'] / image.shape[0] for x in params['scale_search']]
+    multiplier = [x * model_params['boxsize'] / long_side for x in params['scale_search']]
     # print(multiplier)
     for m in range(len(multiplier)):
         scale = multiplier[m]
+        new_h = int(model_params['boxsize']*params['scale_search'][m])
+        new_w = new_h
+        newshape = (new_h, new_w)
 
         imageToTest = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-        imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['stride'],
-                                                          model_params['padValue'])
+        #imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['stride'],
+        #                                                  model_params['padValue'])
+        imageToTest_padded, pad = util.padRightDownCornerFixedShape(imageToTest, newshape, model_params['padValue'])
+
+        if 'savedir' in model_params:
+            save_dir = os.path.join(model_params['savedir'], str(params['scale_search'][m]))
+            if os.path.exists(save_dir) == False:
+                os.makedirs(save_dir)
+            save_imgpath = os.path.join(save_dir, os.path.basename(input_image))
+            cv2.imwrite(save_imgpath, imageToTest_padded)
 
         input_img = np.transpose(np.float32(imageToTest_padded[:, :, :, np.newaxis]),
                                  (3, 0, 1, 2))  # required shape (1, width, height, channels)
-        #print("scale {}, preprocessed imaged shape {} -> {}".format(scale, image.shape, imageToTest_padded.shape))
+        print("scale {}, preprocessed imaged shape {} -> {}".format(scale, image.shape, imageToTest_padded.shape))
         if USE_CAFFE:
             output_blobs = caffePredict(model, input_img)
         else:
@@ -272,7 +283,7 @@ dt_gt_mapping = {
 
 def process(input_image, params, model, model_params):
     oriImg = cv2.imread(input_image)  # B,G,R order
-    heatmap_avg, paf_avg = predict(oriImg, model, model_params)
+    heatmap_avg, paf_avg = predict(oriImg, model, model_params, input_image)
 
     all_peaks = find_peaks(heatmap_avg, params['thre1'])
     connection_all, special_k = find_connections(all_peaks, paf_avg, oriImg.shape[0], params['thre2'])
@@ -307,6 +318,9 @@ def get_image_name(coco, image_id):
 def predict_many(coco, images_directory, validation_ids, params, model, model_params):
     assert (not set(validation_ids).difference(set(coco.getImgIds())))
 
+    if 'savedir' in model_params:
+        if os.path.exists(model_params['savedir']) == False:
+            os.makedirs(model_params['savedir'])
     keypoints = {}
     for image_id in tqdm.tqdm(validation_ids):
         image_name = get_image_name(coco, image_id)
