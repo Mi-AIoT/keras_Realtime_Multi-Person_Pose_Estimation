@@ -18,6 +18,17 @@ if USE_CAFFE:
 else:
     from model import get_testing_model
 
+def FILE_EXIST(file):
+    if not os.path.exists(file):
+        raise argparse.ArgumentTypeError("File {} doesn't exist.".format(file))
+    else:
+        return file
+
+def DIR_EXIST(dir):
+    if not os.path.isdir(dir):
+        raise argparse.ArgumentTypeError("Directory {} doesn't exist.".format(dir))
+    else:
+        return dir
 
 # find connection in the specified sequence, center 29 is in the position 15
 limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], \
@@ -47,10 +58,19 @@ def caffePredict(net, input_img):
     # run net and take argmax for prediction
     outputs = net.forward()
     output_blobs = []
-    paf_blob = outputs.values()[0].transpose((0,2,3,1))
-    heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+    if len(outputs.keys()) > 1:
+        paf_blob = outputs.values()[0].transpose((0,2,3,1))
+        heatmap_blob = outputs.values()[1].transpose((0, 2, 3, 1))
+    else:
+        blobs = outputs.values()[0]
+        heatmap_blob = blobs[:,:19,:,:].transpose((0,2,3,1))
+        paf_blob = blobs[:,19:,:,:].transpose((0,2,3,1))
+    paf_blob = paf_blob / 1100.62162136
+    heatmap_blob = heatmap_blob / 1100.62162136
     output_blobs.append(paf_blob)
     output_blobs.append(heatmap_blob)
+
+    return output_blobs
 
     return output_blobs
 
@@ -264,7 +284,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, default='result.png', help='output image')
     parser.add_argument('--model', type=str, default='model/keras/model.h5', help='path to the weights file')
     parser.add_argument('--gpu', type=int, choices=range(16), help='Specify which GPU device id to train')
-
+    parser.add_argument('--deploy_proto', type=FILE_EXIST, help='Openpose deploy prototxt')
+    parser.add_argument('--deploy_weights', type=FILE_EXIST, help='Openpose deploy weights')
 
     args = parser.parse_args()
     input_image = args.image
@@ -294,7 +315,12 @@ if __name__ == '__main__':
         else:
             caffe.set_device(int(gpu))
             caffe.set_mode_gpu()
+        if args.deploy_proto:
+            model_params['deployFile'] = args.deploy_proto
+        if args.deploy_weights:
+            model_params['caffemodel'] = args.deploy_weights
         model = caffe.Net(model_params['deployFile'], model_params['caffemodel'], caffe.TEST)
+        print("Prototxt: {}\r\nCaffemodel: {}".format(model_params['deployFile'], model_params['caffemodel']))
 
     # generate image with body parts
     canvas = process(input_image, params, model_params)

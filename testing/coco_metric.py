@@ -29,7 +29,7 @@ mapIdx = [[31, 32], [39, 40], [33, 34], [35, 36], [41, 42], [43, 44], [19, 20], 
 
 limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], \
            [10, 11], [2, 12], [12, 13], [13, 14], [2, 1], [1, 15], [15, 17], \
-           [1, 16], [16, 18], [3, 17], [6, 18]]
+            [1, 16], [16, 18], [3, 17], [6, 18]]
 
 def caffePredict(net, input_img):
     # shape for input (data blob is N x C x H x W), set data
@@ -50,6 +50,8 @@ def caffePredict(net, input_img):
         blobs = outputs.values()[0]
         heatmap_blob = blobs[:,:19,:,:].transpose((0,2,3,1))
         paf_blob = blobs[:,19:,:,:].transpose((0,2,3,1))
+    paf_blob = paf_blob / 1100.62162136
+    heatmap_blob = heatmap_blob / 1100.62162136
     output_blobs.append(paf_blob)
     output_blobs.append(heatmap_blob)
 
@@ -59,6 +61,9 @@ def predict(image, model, model_params):
     # print (image.shape)
     heatmap_avg = np.zeros((image.shape[0], image.shape[1], 19))
     paf_avg = np.zeros((image.shape[0], image.shape[1], 38))
+    long_side = image.shape[0]
+    if image.shape[0] < image.shape[1]:
+        long_side = image.shape[1]
     multiplier = [x * model_params['boxsize'] / image.shape[0] for x in params['scale_search']]
     # print(multiplier)
     for m in range(len(multiplier)):
