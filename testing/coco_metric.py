@@ -380,7 +380,7 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017', fixed_d
     if os.path.exists(os.path.dirname(resFile)) == False:
         os.makedirs(os.path.dirname(resFile))
 
-    keypoints = predict_many(cocoGt, os.path.join(dataDir, dataset), validation_ids, params, model, model_paramsi, fixed_dumpdir)
+    keypoints = predict_many(cocoGt, os.path.join(dataDir, dataset), validation_ids, params, model, model_params, fixed_dumpdir)
     format_results(keypoints, resFile)
 
     cocoDt = cocoGt.loadRes(resFile)
