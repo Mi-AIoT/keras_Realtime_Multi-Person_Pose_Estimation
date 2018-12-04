@@ -16,6 +16,7 @@ from pycocotools.cocoeval import COCOeval
 import util
 
 from config_reader import config_reader
+from evdumpparser import evdumpparser
 
 params, model_params = config_reader()
 params['scale_search'] = list(params['scale_search'])
@@ -31,17 +32,24 @@ limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], \
            [10, 11], [2, 12], [12, 13], [13, 14], [2, 1], [1, 15], [15, 17], \
             [1, 16], [16, 18], [3, 17], [6, 18]]
 
-def caffePredict(net, input_img):
-    # shape for input (data blob is N x C x H x W), set data
-    in_ = input_img
-    in_ = in_.transpose((0,3,1,2))
-    in_ = in_ / 256
-    in_ = in_ - 0.5
-    inputname = net.inputs[0]
-    net.blobs[inputname].reshape(*in_.shape)
-    net.blobs[inputname].data[...] = in_
-    # run net and take argmax for prediction
-    outputs = net.forward()
+def caffePredict(net, input_img, idx=0, fixed_dumpdir=None):
+    if fixed_dumpdir:
+        evdump = evdumpparser(fixed_dumpdir, net.outputs)
+        outputs = evdump.parse_layerdumps(net.outputs, idx)
+        if len(outputs) == 0:
+            print("Not able to find host fixed binary file image index {} in {}, please check!".format(idx, fixed_dumpdir))
+            sys.exit(1)
+    else:
+        # shape for input (data blob is N x C x H x W), set data
+        in_ = input_img
+        in_ = in_.transpose((0,3,1,2))
+        in_ = in_ / 256
+        in_ = in_ - 0.5
+        inputname = net.inputs[0]
+        net.blobs[inputname].reshape(*in_.shape)
+        net.blobs[inputname].data[...] = in_
+        # run net and take argmax for prediction
+        outputs = net.forward()
     output_blobs = []
     if len(outputs.keys()) > 1:
         paf_blob = outputs.values()[0].transpose((0,2,3,1))
@@ -57,7 +65,7 @@ def caffePredict(net, input_img):
 
     return output_blobs
 
-def predict(image, model, model_params, input_image):
+def predict(image, model, model_params, input_image, idx=0, fixed_dumpdir=None):
     # print (image.shape)
     heatmap_avg = np.zeros((image.shape[0], image.shape[1], 19))
     paf_avg = np.zeros((image.shape[0], image.shape[1], 38))
@@ -75,6 +83,7 @@ def predict(image, model, model_params, input_image):
         imageToTest = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         #imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['stride'],
         #                                                  model_params['padValue'])
+        ## Use fixed shape input for accuracy testing, both caffe and host-fixed
         imageToTest_padded, pad = util.padRightDownCornerFixedShape(imageToTest, newshape, model_params['padValue'])
 
         if 'savedir' in model_params:
@@ -88,7 +97,11 @@ def predict(image, model, model_params, input_image):
                                  (3, 0, 1, 2))  # required shape (1, width, height, channels)
         print("scale {}, preprocessed imaged shape {} -> {}".format(scale, image.shape, imageToTest_padded.shape))
         if USE_CAFFE:
-            output_blobs = caffePredict(model, input_img)
+            if fixed_dumpdir:
+                dumpdir = os.path.join(fixed_dumpdir, str(params['scale_search'][m]))
+            else:
+                dumpdir = None
+            output_blobs = caffePredict(model, input_img, idx, dumpdir)
         else:
             output_blobs = model.predict(input_img)
 
@@ -281,9 +294,9 @@ dt_gt_mapping = {
 }
 
 
-def process(input_image, params, model, model_params):
+def process(input_image, params, model, model_params, idx=0, fixed_dumpdir=None):
     oriImg = cv2.imread(input_image)  # B,G,R order
-    heatmap_avg, paf_avg = predict(oriImg, model, model_params, input_image)
+    heatmap_avg, paf_avg = predict(oriImg, model, model_params, input_image, idx, fixed_dumpdir)
 
     all_peaks = find_peaks(heatmap_avg, params['thre1'])
     connection_all, special_k = find_connections(all_peaks, paf_avg, oriImg.shape[0], params['thre2'])
@@ -315,17 +328,19 @@ def get_image_name(coco, image_id):
     return coco.imgs[image_id]['file_name']
 
 
-def predict_many(coco, images_directory, validation_ids, params, model, model_params):
+def predict_many(coco, images_directory, validation_ids, params, model, model_params, fixed_dumpdir=None):
     assert (not set(validation_ids).difference(set(coco.getImgIds())))
 
     if 'savedir' in model_params:
         if os.path.exists(model_params['savedir']) == False:
             os.makedirs(model_params['savedir'])
     keypoints = {}
+    idx = 0
     for image_id in tqdm.tqdm(validation_ids):
         image_name = get_image_name(coco, image_id)
         image_name = os.path.join(images_directory, image_name)
-        keypoints[image_id] = process(image_name, dict(params), model, dict(model_params))
+        keypoints[image_id] = process(image_name, dict(params), model, dict(model_params), idx, fixed_dumpdir)
+        idx += 1
     return keypoints
 
 
@@ -349,7 +364,7 @@ def format_results(keypoints, resFile):
     json.dump(format_keypoints, open(resFile, 'w'))
 
 
-def validation(model, dump_name, validation_ids=None, dataset='val2017'):
+def validation(model, dump_name, validation_ids=None, dataset='val2017', fixed_dumpdir=None):
     annType = 'keypoints'
     prefix = 'person_keypoints'
 
@@ -365,7 +380,7 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     if os.path.exists(os.path.dirname(resFile)) == False:
         os.makedirs(os.path.dirname(resFile))
 
-    keypoints = predict_many(cocoGt, os.path.join(dataDir, dataset), validation_ids, params, model, model_params)
+    keypoints = predict_many(cocoGt, os.path.join(dataDir, dataset), validation_ids, params, model, model_paramsi, fixed_dumpdir)
     format_results(keypoints, resFile)
 
     cocoDt = cocoGt.loadRes(resFile)
