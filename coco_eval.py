@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--deploy_proto', type=FILE_EXIST, help='Openpose deploy prototxt')
 parser.add_argument('--deploy_weights', type=FILE_EXIST, help='Openpose deploy weights')
 parser.add_argument('--dataset', type=str, default="val2014", help='dataset used, supported val2014 or val2017')
+parser.add_argument('--dump_name', type=str, default="origin", help='dump result name used')
 parser.add_argument('--evallist', type=FILE_EXIST, help='evaluation list, such as caffe_rtpose/image_info_val2014_1k.txt')
 parser.add_argument('--gpu', type=int, choices=range(16), help='Specify which GPU device id to train')
 parser.add_argument('--fixed_dumpdir', type=FILE_EXIST, help='Path of folder of fixed point dumped out directory, if specified, will parse it instead of running caffe inference')
@@ -106,7 +107,7 @@ if args.evallist is not None:
             if len(splits) > 1:
                 validation_ids.append(int(splits[1]))
 
-eval_result_original = validation(model, dump_name = 'original', validation_ids=validation_ids, dataset=args.dataset, fixed_dumpdir=args.fixed_dumpdir)
+eval_result_original = validation(model, dump_name = args.dump_name, validation_ids=validation_ids, dataset=args.dataset, fixed_dumpdir=args.fixed_dumpdir)
 joblib.dump(eval_result_original, 'metrics-raw-original.dump')
 
 raw_eval_list = glob.glob('metrics-raw*.dump')
