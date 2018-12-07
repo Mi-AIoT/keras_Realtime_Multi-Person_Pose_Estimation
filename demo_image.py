@@ -70,6 +70,7 @@ def caffePredict(net, input_img):
             paf_blob = blob_0
     else:
         blobs = outputs.values()[0]
+        #np.save("output", outputs.values()[0])
         heatmap_blob = blobs[:,:19,:,:].transpose((0,2,3,1))
         paf_blob = blobs[:,19:,:,:].transpose((0,2,3,1))
     #paf_blob = paf_blob / 1100.62162136
@@ -84,9 +85,6 @@ def process (input_image, params, model_params):
     oriImg = cv2.imread(input_image)  # B,G,R order
     multiplier = [x * model_params['boxsize'] / oriImg.shape[0] for x in params['scale_search']]
 
-    if USE_CAFFE:
-        multiplier = multiplier[:-1]
-
     heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 19))
     paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 38))
 
@@ -97,6 +95,7 @@ def process (input_image, params, model_params):
         imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['stride'],
                                                           model_params['padValue'])
 
+        print("image scale {}, preprocessed imaged shape {} -> {}".format(scale, oriImg.shape, imageToTest_padded.shape))
         input_img = np.transpose(np.float32(imageToTest_padded[:,:,:,np.newaxis]), (3,0,1,2)) # required shape (1, width, height, channels)
         if USE_CAFFE:
             output_blobs = caffePredict(model, input_img)
