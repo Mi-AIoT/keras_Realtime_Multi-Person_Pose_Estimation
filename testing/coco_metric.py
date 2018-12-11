@@ -16,7 +16,11 @@ from pycocotools.cocoeval import COCOeval
 import util
 
 from config_reader import config_reader
-from evdumpparser import evdumpparser
+try:
+    from evdumpparser import evdumpparser
+except:
+    print("Please add evdumpparser module path into PYTHONPATH")
+    pass
 
 params, model_params = config_reader()
 params['scale_search'] = list(params['scale_search'])
